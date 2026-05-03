@@ -181,3 +181,96 @@ deleteRds <- function(name) {
   }
   ok
 }
+
+#List of methods used in the model for plotting
+methods_used <- c(
+  "glmnet", 
+  "pls", 
+  "pcr", 
+  "rpart", 
+  "lmStepAIC",
+  "ranger",
+  "xgbTree",
+  "rbf",
+  # "mlpKerasDropout",
+  #"elm", 
+  # "mlp", 
+  "brnn",
+  "lssvmRadial",
+  "svmLinear", 
+  "svmPoly", 
+  "svmExpoString",
+  "svmRadial", 
+  "svmSpectrumString",
+  "avNNet", 
+  "gamboost", 
+  "gcvEarth", 
+  "cubist",
+  "gaussprLinear",
+  "logicBag",
+  "kknn", 
+  "bartMachine"
+)
+
+#Model tab generator helping function 
+modelTab <- function(title, method) {
+  tabPanel(
+    title,
+    verbatimTextOutput(outputId = paste0(method, "_MethodSummary")),
+    fluidRow(
+      column(
+        width = 4,
+        selectizeInput(
+          inputId = paste0(method, "_Preprocess"),
+          label = "Pre-processing",
+          choices = unique(c(default_initial, ppchoices)),
+          multiple = TRUE,
+          selected = default_initial
+        ),
+        bsTooltip(
+          id = paste0(method, "_Preprocess"),
+          title = "These entries will be populated in the correct order from a saved model once it loads",
+          placement = "top"
+        )
+      ),
+      column(
+        width = 1,
+        actionButton(inputId = paste0(method, "_Go"), label = "Train", icon = icon("play")),
+        bsTooltip(id = paste0(method, "_Go"), title = "This will train or retrain your model (and save it)")
+      ),
+      column(
+        width = 1,
+        actionButton(inputId = paste0(method, "_Load"), label = "Load", icon = icon("file-arrow-up")),
+        bsTooltip(id = paste0(method, "_Load"), title = "This will reload your saved model")
+      ),
+      column(
+        width = 1,
+        actionButton(inputId = paste0(method, "_Delete"), label = "Forget", icon = icon("trash-can")),
+        bsTooltip(id = paste0(method, "_Delete"), title = "This will remove your model from memory")
+      )
+    ),
+    hr(),
+    h3("Resampled performance:"),
+    tableOutput(outputId = paste0(method, "_Metrics")),
+    hr(),
+    h3("Hyperparameter Tuning:"),
+    plotOutput(outputId = paste0(method, "_ModelTune")),
+    hr(),
+    h3("Recipe:"),
+    htmlOutput(outputId = paste0(method, "_RecipePrint")),
+    h3("Outputs"),
+    tableOutput(outputId = paste0(method, "_RecipeOutput")),
+    fluidRow(
+      column(
+        width = 6,
+        h3("Training Summary:"),
+        verbatimTextOutput(outputId = paste0(method, "_TrainSummary"))
+      ),
+      column(
+        width = 6,
+        h3("Best Tune"),
+        wellPanel(tableOutput(outputId = paste0(method, "_Coef")))
+      )
+    )
+  )
+}
