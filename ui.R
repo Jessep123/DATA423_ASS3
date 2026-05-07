@@ -72,9 +72,9 @@ shinyUI(navbarPage(
                                                     selectizeInput(
                                                       inputId = "glmnet_Preprocess",
                                                       label = "Pre-processing",
-                                                      choices = unique(c(glmnet_initial, ppchoices)),
+                                                      choices = unique(c(default_initial, ppchoices)),
                                                       multiple = TRUE,
-                                                      selected = glmnet_initial
+                                                      selected = default_initial
                                                     ),
                                                     bsTooltip(
                                                       id = "glmnet_Preprocess",
@@ -127,9 +127,9 @@ shinyUI(navbarPage(
                                                     selectizeInput(
                                                       inputId = "pls_Preprocess",
                                                       label = "Pre-processing",
-                                                      choices = unique(c(pls_initial, ppchoices)),
+                                                      choices = unique(c(default_initial, ppchoices)),
                                                       multiple = TRUE,
-                                                      selected = pls_initial
+                                                      selected = default_initial
                                                     ),
                                                     bsTooltip(
                                                       id = "pls_Preprocess",
@@ -298,7 +298,7 @@ shinyUI(navbarPage(
                                                       label = "Pre-processing",
                                                       choices = unique(c(rpart_initial, ppchoices)),
                                                       multiple = TRUE,
-                                                      selected = rpart_initial
+                                                      selected = default_initial
                                                     ),
                                                     bsTooltip(id = "rpart_Preprocess", title = "These entries will be populated in the correct order from a saved model once it loads", placement = "top")
                                              ),
@@ -337,52 +337,52 @@ shinyUI(navbarPage(
                                            )
                                   ),
                                   
-                                  tabPanel("Gradient Boosted", #method = xgbTree
-                                           verbatimTextOutput(outputId = "xgbTree_MethodSummary"),
+                                  tabPanel("Gradient Boosted", #method = gbm
+                                           verbatimTextOutput(outputId = "gbm_MethodSummary"),
                                            fluidRow(
                                              column(width = 4,
                                                     selectizeInput(
-                                                      inputId = "xgbTree_Preprocess",
+                                                      inputId = "gbm_Preprocess",
                                                       label = "Pre-processing",
                                                       choices = unique(c(default_initial, ppchoices)),
                                                       multiple = TRUE,
                                                       selected = default_initial
                                                     ),
-                                                    bsTooltip(id = "xgbTree_Preprocess", title = "These entries will be populated in the correct order from a saved model once it loads", placement = "top")
+                                                    bsTooltip(id = "gbm_Preprocess", title = "These entries will be populated in the correct order from a saved model once it loads", placement = "top")
                                              ),
                                              column(width = 1,
-                                                    actionButton(inputId = "xgbTree_Go", label = "Train", icon = icon("play")),
-                                                    bsTooltip(id = "xgbTree_Go", title = "This will train or retrain your model (and save it)")
+                                                    actionButton(inputId = "gbm_Go", label = "Train", icon = icon("play")),
+                                                    bsTooltip(id = "gbm_Go", title = "This will train or retrain your model (and save it)")
                                              ),
                                              column(width = 1,
-                                                    actionButton(inputId = "xgbTree_Load", label = "Load", icon = icon("file-arrow-up")),
-                                                    bsTooltip(id = "xgbTree_Load", title = "This will reload your saved model")
+                                                    actionButton(inputId = "gbm_Load", label = "Load", icon = icon("file-arrow-up")),
+                                                    bsTooltip(id = "gbm_Load", title = "This will reload your saved model")
                                              ),
                                              column(width = 1,
-                                                    actionButton(inputId = "xgbTree_Delete", label = "Forget", icon = icon("trash-can")),
-                                                    bsTooltip(id = "xgbTree_Delete", title = "This will remove your model from memory")
+                                                    actionButton(inputId = "gbm_Delete", label = "Forget", icon = icon("trash-can")),
+                                                    bsTooltip(id = "gbm_Delete", title = "This will remove your model from memory")
                                              )
                                            ),
                                            hr(),
                                            h3("Resampled performance:"),
-                                           tableOutput(outputId = "xgbTree_Metrics"),
+                                           tableOutput(outputId = "gbm_Metrics"),
                                            hr(),
                                            h3("Hyperparameter Tuning:"),
-                                           plotOutput(outputId = "xgbTree_ModelTune"),
+                                           plotOutput(outputId = "gbm_ModelTune"),
                                            hr(),
                                            h3("Variable Importance:"),
-                                           plotOutput(outputId = "xgbTree_VarImp"),
+                                           plotOutput(outputId = "gbm_VarImp"),
                                            hr(),
                                            h3("Recipe:"),
-                                           htmlOutput(outputId = "xgbTree_RecipePrint"),
+                                           htmlOutput(outputId = "gbm_RecipePrint"),
                                            h3("Outputs"),
-                                           tableOutput(outputId = "xgbTree_RecipeOutput"),
+                                           tableOutput(outputId = "gbm_RecipeOutput"),
                                            fluidRow(
                                              column(width = 6,
                                                     h3("Training Summary:"),
-                                                    verbatimTextOutput(outputId = "xgbTree_TrainSummary")
+                                                    verbatimTextOutput(outputId = "gbm_TrainSummary")
                                              )
-                                           )),#gradient boosted tree tab end
+                                           )), # gbm tab end
                                   
                                   tabPanel("Random Forest", #method = ranger
                                            verbatimTextOutput(outputId = "ranger_MethodSummary"),
@@ -803,66 +803,7 @@ shinyUI(navbarPage(
                        tabPanel("Kernel Methods",
                                 tabsetPanel(
                                   type = "pills",
-                                  tabPanel("Least Squares SVM", # method = lssvmLinear
-                                           verbatimTextOutput(outputId = "lssvmLinear_MethodSummary"),
-                                           fluidRow(
-                                             column(
-                                               width = 4,
-                                               selectizeInput(
-                                                 inputId = "lssvmLinear_Preprocess",
-                                                 label = "Pre-processing",
-                                                 choices = unique(c(default_initial, ppchoices)),
-                                                 multiple = TRUE,
-                                                 selected = default_initial
-                                               ),
-                                               bsTooltip(
-                                                 id = "lssvmLinear_Preprocess",
-                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
-                                                 placement = "top"
-                                               )
-                                             ),
-                                             column(
-                                               width = 1,
-                                               actionButton(inputId = "lssvmLinear_Go", label = "Train", icon = icon("play")),
-                                               bsTooltip(id = "lssvmLinear_Go", title = "This will train or retrain your model (and save it)")
-                                             ),
-                                             column(
-                                               width = 1,
-                                               actionButton(inputId = "lssvmLinear_Load", label = "Load", icon = icon("file-arrow-up")),
-                                               bsTooltip(id = "lssvmLinear_Load", title = "This will reload your saved model")
-                                             ),
-                                             column(
-                                               width = 1,
-                                               actionButton(inputId = "lssvmLinear_Delete", label = "Forget", icon = icon("trash-can")),
-                                               bsTooltip(id = "lssvmLinear_Delete", title = "This will remove your model from memory")
-                                             )
-                                           ),
-                                           hr(),
-                                           h3("Resampled performance:"),
-                                           tableOutput(outputId = "lssvmLinear_Metrics"),
-                                           hr(),
-                                           h3("Hyperparameter Tuning:"),
-                                           plotOutput(outputId = "lssvmLinear_ModelTune"),
-                                           hr(),
-                                           h3("Recipe:"),
-                                           htmlOutput(outputId = "lssvmLinear_RecipePrint"),
-                                           h3("Outputs"),
-                                           tableOutput(outputId = "lssvmLinear_RecipeOutput"),
-                                           fluidRow(
-                                             column(
-                                               width = 6,
-                                               h3("Training Summary:"),
-                                               verbatimTextOutput(outputId = "lssvmLinear_TrainSummary")
-                                             ),
-                                             column(
-                                               width = 6,
-                                               h3("Best Tune"),
-                                               wellPanel(
-                                                 tableOutput(outputId = "lssvmLinear_Coef")
-                                               )
-                                             )
-                                           )
-                                           ), #least squares tab end
+                                  
                                   tabPanel("Linear Kernel", # method = svmLinear
                                            verbatimTextOutput(outputId = "svmLinear_MethodSummary"),
                                            fluidRow(
@@ -922,48 +863,684 @@ shinyUI(navbarPage(
                                                )
                                              )
                                            )
-                                           ), #linear kernel tab end
-                                  tabPanel("Polynomial Kernel" #method = svmPoly
-                                           ), #polynomial kernel tab end
-                                  tabPanel("Exponential Kernel" #method = svmExpoString
-                                           ), #exponential kernel tab end
-                                  tabPanel("Radial Basis Kernel" #method = svmRadial
-                                           ), #radial basis kernel tab end
-                                  tabPanel("Spectrum Spring Kernel" #method = svmSpectrumString
-                                           ), #spectrum spring kernel tab end
-                                  tabPanel("Gaussian Process" #method = gaussprLinear
-                                           ),
-                                  tabPanel("L2 Regularized Linear Support Vector Machines with Class Weights" #method =svmLinearWeights2
+                                  ),
+                                  tabPanel("Polynomial Kernel", # method = svmPoly
+                                           verbatimTextOutput(outputId = "svmPoly_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "svmPoly_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "svmPoly_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmPoly_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "svmPoly_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmPoly_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "svmPoly_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmPoly_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "svmPoly_Delete", title = "This will remove your model from memory")
                                              )
-                                  
-                                )#tabset panel end
-                       ),#kernel methods tab end
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "svmPoly_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "svmPoly_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "svmPoly_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "svmPoly_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "svmPoly_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "svmPoly_Coef")
+                                               )
+                                             )
+                                           )
+                                  ),
+                                  tabPanel("Exponential Kernel", # method = svmExpoString
+                                           verbatimTextOutput(outputId = "svmExpoString_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "svmExpoString_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "svmExpoString_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmExpoString_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "svmExpoString_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmExpoString_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "svmExpoString_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmExpoString_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "svmExpoString_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "svmExpoString_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "svmExpoString_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "svmExpoString_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "svmExpoString_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "svmExpoString_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "svmExpoString_Coef")
+                                               )
+                                             )
+                                           )
+                                  ),
+                                  tabPanel("Radial Basis Kernel", # method = svmRadial
+                                           verbatimTextOutput(outputId = "svmRadial_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "svmRadial_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "svmRadial_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmRadial_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "svmRadial_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmRadial_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "svmRadial_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmRadial_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "svmRadial_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "svmRadial_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "svmRadial_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "svmRadial_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "svmRadial_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "svmRadial_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "svmRadial_Coef")
+                                               )
+                                             )
+                                           )
+                                  ),
+                                  tabPanel("Spectrum String Kernel", # method = svmSpectrumString
+                                           verbatimTextOutput(outputId = "svmSpectrumString_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "svmSpectrumString_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "svmSpectrumString_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmSpectrumString_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "svmSpectrumString_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmSpectrumString_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "svmSpectrumString_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmSpectrumString_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "svmSpectrumString_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "svmSpectrumString_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "svmSpectrumString_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "svmSpectrumString_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "svmSpectrumString_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "svmSpectrumString_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "svmSpectrumString_Coef")
+                                               )
+                                             )
+                                           )
+                                  ),
+                                  tabPanel("Gaussian Process", # method = gaussprLinear
+                                           verbatimTextOutput(outputId = "gaussprLinear_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "gaussprLinear_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "gaussprLinear_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gaussprLinear_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "gaussprLinear_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gaussprLinear_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "gaussprLinear_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gaussprLinear_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "gaussprLinear_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "gaussprLinear_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "gaussprLinear_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "gaussprLinear_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "gaussprLinear_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "gaussprLinear_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "gaussprLinear_Coef")
+                                               )
+                                             )
+                                           )
+                                  ),
+                                  tabPanel("L2 Regularized Support Vector Machines with Linear Kernel", # method = svmLinear3
+                                           verbatimTextOutput(outputId = "svmLinear3_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "svmLinear3_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "svmLinear3_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmLinear3_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "svmLinear3_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmLinear3_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "svmLinear3_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "svmLinear3_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "svmLinear3_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "svmLinear3_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "svmLinear3_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "svmLinear3_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "svmLinear3_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "svmLinear3_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "svmLinear3_Coef")
+                                               )
+                                             )
+                                           )
+                                  )
+                                )
+                       ), # kernel methods tab end
+                       
                        tabPanel("Flexible Nonlinear Models",
                                 tabsetPanel(
                                   type = "pills",
                                   
-                                  tabPanel("Multivariate Adaptive Regression Splines" #method = gcvEarth
+                                  tabPanel("Multivariate Adaptive Regression Splines", # method = gcvEarth
+                                           verbatimTextOutput(outputId = "gcvEarth_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "gcvEarth_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "gcvEarth_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gcvEarth_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "gcvEarth_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gcvEarth_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "gcvEarth_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gcvEarth_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "gcvEarth_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "gcvEarth_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "gcvEarth_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "gcvEarth_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "gcvEarth_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "gcvEarth_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "gcvEarth_Coef")
+                                               )
+                                             )
+                                           )
                                   ),
-                                  
-                                  tabPanel("Boosted Generalized Additive Model" #method = gamboost
+                                  tabPanel("Boosted Generalized Additive Model", # method = gamboost
+                                           verbatimTextOutput(outputId = "gamboost_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "gamboost_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "gamboost_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gamboost_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "gamboost_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gamboost_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "gamboost_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "gamboost_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "gamboost_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "gamboost_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "gamboost_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "gamboost_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "gamboost_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "gamboost_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "gamboost_Coef")
+                                               )
+                                             )
+                                           )
                                   ),
-                                  
-                                  tabPanel("Bayesian Additive Regression Trees" #method = bartMachine
-                                  )
+                                  # tabPanel("Bayesian Additive Regression Trees", # method = bartMachine
+                                  #          verbatimTextOutput(outputId = "bartMachine_MethodSummary"),
+                                  #          fluidRow(
+                                  #            column(
+                                  #              width = 4,
+                                  #              selectizeInput(
+                                  #                inputId = "bartMachine_Preprocess",
+                                  #                label = "Pre-processing",
+                                  #                choices = unique(c(default_initial, ppchoices)),
+                                  #                multiple = TRUE,
+                                  #                selected = default_initial
+                                  #              ),
+                                  #              bsTooltip(
+                                  #                id = "bartMachine_Preprocess",
+                                  #                title = "These entries will be populated in the correct order from a saved model once it loads",
+                                  #                placement = "top"
+                                  #              )
+                                  #            ),
+                                  #            column(
+                                  #              width = 1,
+                                  #              actionButton(inputId = "bartMachine_Go", label = "Train", icon = icon("play")),
+                                  #              bsTooltip(id = "bartMachine_Go", title = "This will train or retrain your model (and save it)")
+                                  #            ),
+                                  #            column(
+                                  #              width = 1,
+                                  #              actionButton(inputId = "bartMachine_Load", label = "Load", icon = icon("file-arrow-up")),
+                                  #              bsTooltip(id = "bartMachine_Load", title = "This will reload your saved model")
+                                  #            ),
+                                  #            column(
+                                  #              width = 1,
+                                  #              actionButton(inputId = "bartMachine_Delete", label = "Forget", icon = icon("trash-can")),
+                                  #              bsTooltip(id = "bartMachine_Delete", title = "This will remove your model from memory")
+                                  #            )
+                                  #          ),
+                                  #          hr(),
+                                  #          h3("Resampled performance:"),
+                                  #          tableOutput(outputId = "bartMachine_Metrics"),
+                                  #          hr(),
+                                  #          h3("Hyperparameter Tuning:"),
+                                  #          plotOutput(outputId = "bartMachine_ModelTune"),
+                                  #          hr(),
+                                  #          h3("Recipe:"),
+                                  #          htmlOutput(outputId = "bartMachine_RecipePrint"),
+                                  #          h3("Outputs"),
+                                  #          tableOutput(outputId = "bartMachine_RecipeOutput"),
+                                  #          fluidRow(
+                                  #            column(
+                                  #              width = 6,
+                                  #              h3("Training Summary:"),
+                                  #              verbatimTextOutput(outputId = "bartMachine_TrainSummary")
+                                  #            ),
+                                  #            column(
+                                  #              width = 6,
+                                  #              h3("Best Tune"),
+                                  #              wellPanel(
+                                  #                tableOutput(outputId = "bartMachine_Coef")
+                                  #              )
+                                  #            )
+                                  #          )
+                                  # )
                                 )
-                       ),
+                       ), # flexible nonlinear models tab end
                        
                        tabPanel("Rule-Based Models",
                                 tabsetPanel(
                                   type = "pills",
                                   
-                                  tabPanel("Cubist" #method = cubist
+                                  tabPanel("Cubist", # method = cubist
+                                           verbatimTextOutput(outputId = "cubist_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "cubist_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "cubist_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "cubist_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "cubist_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "cubist_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "cubist_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "cubist_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "cubist_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "cubist_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "cubist_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "cubist_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "cubist_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "cubist_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "cubist_Coef")
+                                               )
+                                             )
+                                           )
                                   ),
-                                  
-                                  tabPanel("Bagged Logic Regression" #method = logicBag
+                                  tabPanel("Bagged Logic Regression", # method = logicBag
+                                           verbatimTextOutput(outputId = "logicBag_MethodSummary"),
+                                           fluidRow(
+                                             column(
+                                               width = 4,
+                                               selectizeInput(
+                                                 inputId = "logicBag_Preprocess",
+                                                 label = "Pre-processing",
+                                                 choices = unique(c(default_initial, ppchoices)),
+                                                 multiple = TRUE,
+                                                 selected = default_initial
+                                               ),
+                                               bsTooltip(
+                                                 id = "logicBag_Preprocess",
+                                                 title = "These entries will be populated in the correct order from a saved model once it loads",
+                                                 placement = "top"
+                                               )
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "logicBag_Go", label = "Train", icon = icon("play")),
+                                               bsTooltip(id = "logicBag_Go", title = "This will train or retrain your model (and save it)")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "logicBag_Load", label = "Load", icon = icon("file-arrow-up")),
+                                               bsTooltip(id = "logicBag_Load", title = "This will reload your saved model")
+                                             ),
+                                             column(
+                                               width = 1,
+                                               actionButton(inputId = "logicBag_Delete", label = "Forget", icon = icon("trash-can")),
+                                               bsTooltip(id = "logicBag_Delete", title = "This will remove your model from memory")
+                                             )
+                                           ),
+                                           hr(),
+                                           h3("Resampled performance:"),
+                                           tableOutput(outputId = "logicBag_Metrics"),
+                                           hr(),
+                                           h3("Hyperparameter Tuning:"),
+                                           plotOutput(outputId = "logicBag_ModelTune"),
+                                           hr(),
+                                           h3("Recipe:"),
+                                           htmlOutput(outputId = "logicBag_RecipePrint"),
+                                           h3("Outputs"),
+                                           tableOutput(outputId = "logicBag_RecipeOutput"),
+                                           fluidRow(
+                                             column(
+                                               width = 6,
+                                               h3("Training Summary:"),
+                                               verbatimTextOutput(outputId = "logicBag_TrainSummary")
+                                             ),
+                                             column(
+                                               width = 6,
+                                               h3("Best Tune"),
+                                               wellPanel(
+                                                 tableOutput(outputId = "logicBag_Coef")
+                                               )
+                                             )
+                                           )
                                   )
                                 )
-                       )
+                       ) # rule-based models tab end
+                       
                                 
            )
   ),

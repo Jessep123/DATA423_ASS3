@@ -21,6 +21,7 @@ library(rlist)
 library(ggplot2)
 library(butcher)
 library(MASS)
+library(fastICA)
 
 options(digits = 3)
 
@@ -30,7 +31,18 @@ rpart_initial <- c("dow", "month") # <-- These are arbitrary starting values. Se
 # maintenance point ---------------------------------------------------------------------------------------------------------------------------
 # add further preprocessing choices for the new methods here
 
-default_initial <- c("impute_knn", "dow","center", "scale", "dummy") #Default processing choice that will be used for all models to compare 
+#Default processing choice that will be used for all models to compare 
+default_initial <- c(
+  "impute_knn",
+  "dow",
+  "dummy",
+  "zv",
+  "nzv",
+  "corr",
+  "lincomb",
+  "center",
+  "scale"
+) 
 
 
 
@@ -58,7 +70,7 @@ stopMode <- function(obj) {
 
 ppchoices <- c("impute_knn", "impute_bag", "impute_median", "impute_mode", "YeoJohnson", "naomit", 
                "pca", "pls", "ica", "center", "scale", "month", "dow", "dateDecimal", "nzv", "zv", "other", 
-               "dummy", "poly", "interact", "indicate_na", "corr")
+               "dummy", "poly", "interact", "indicate_na", "corr", "lincomb")
 
 # This function turns the method's selected preprocessing into a recipe that honours the same order. 
 # You are allowed to add more recipe steps to this.
@@ -111,6 +123,8 @@ dynamicSteps <- function(recipe, preprocess) {
       recipe <- recipes::step_corr(recipe, all_numeric_predictors(), threshold = 0.9)
     } else if (s == "indicate_na") {
       recipe <- recipes::step_indicate_na(recipe, all_predictors()) #shadow variables (this needs to precede dealing with NA)
+    } else if (s == "lincomb") {
+      recipe <- recipes::step_lincomb(recipe, all_numeric_predictors())
     } else if (s == "rm") {
       # intentionally blank
     } else {
@@ -208,69 +222,7 @@ methods_used <- c(
   "cubist",
   "gaussprLinear",
   "logicBag",
-  "kknn", 
-  "bartMachine"
+  "kknn"
+  # "bartMachine"
 )
 
-#Model tab generator helping function 
-modelTab <- function(title, method) {
-  tabPanel(
-    title,
-    verbatimTextOutput(outputId = paste0(method, "_MethodSummary")),
-    fluidRow(
-      column(
-        width = 4,
-        selectizeInput(
-          inputId = paste0(method, "_Preprocess"),
-          label = "Pre-processing",
-          choices = unique(c(default_initial, ppchoices)),
-          multiple = TRUE,
-          selected = default_initial
-        ),
-        bsTooltip(
-          id = paste0(method, "_Preprocess"),
-          title = "These entries will be populated in the correct order from a saved model once it loads",
-          placement = "top"
-        )
-      ),
-      column(
-        width = 1,
-        actionButton(inputId = paste0(method, "_Go"), label = "Train", icon = icon("play")),
-        bsTooltip(id = paste0(method, "_Go"), title = "This will train or retrain your model (and save it)")
-      ),
-      column(
-        width = 1,
-        actionButton(inputId = paste0(method, "_Load"), label = "Load", icon = icon("file-arrow-up")),
-        bsTooltip(id = paste0(method, "_Load"), title = "This will reload your saved model")
-      ),
-      column(
-        width = 1,
-        actionButton(inputId = paste0(method, "_Delete"), label = "Forget", icon = icon("trash-can")),
-        bsTooltip(id = paste0(method, "_Delete"), title = "This will remove your model from memory")
-      )
-    ),
-    hr(),
-    h3("Resampled performance:"),
-    tableOutput(outputId = paste0(method, "_Metrics")),
-    hr(),
-    h3("Hyperparameter Tuning:"),
-    plotOutput(outputId = paste0(method, "_ModelTune")),
-    hr(),
-    h3("Recipe:"),
-    htmlOutput(outputId = paste0(method, "_RecipePrint")),
-    h3("Outputs"),
-    tableOutput(outputId = paste0(method, "_RecipeOutput")),
-    fluidRow(
-      column(
-        width = 6,
-        h3("Training Summary:"),
-        verbatimTextOutput(outputId = paste0(method, "_TrainSummary"))
-      ),
-      column(
-        width = 6,
-        h3("Best Tune"),
-        wellPanel(tableOutput(outputId = paste0(method, "_Coef")))
-      )
-    )
-  )
-}

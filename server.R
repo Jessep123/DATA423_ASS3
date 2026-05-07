@@ -927,13 +927,23 @@ shinyServer(function(input, output, session) {
       showNotification(id = method, paste("Processing", method, "model using resampling"), session = session, duration = NULL)
       obj <- startMode(input$Parallel)
       tryCatch({
+        
+        rec <- getpcrRecipe()
+        
+        prep_rec <- recipes::prep(rec, training = getTrainData(), retain = TRUE)
+        baked <- recipes::juice(prep_rec)
+        
+        max_ncomp <- min(
+          25,
+          ncol(baked) - 1,   
+          nrow(baked) - 1
+        )
         model <- caret::train(getpcrRecipe(), 
                               data = getTrainData(), 
                               method = method, 
                               metric = "RMSE",
                               trControl = getTrControl(), 
-                              tuneGrid = expand.grid(ncomp = 1:25),
-                              tuneLength = 25, 
+                              tuneGrid = expand.grid(ncomp = 1:max_ncomp),
                               na.action = na.pass)
         deleteRds(method)
         saveToRds(model, method)
@@ -1177,45 +1187,43 @@ shinyServer(function(input, output, session) {
     print(mod)
   })
   
-  # METHOD * xgbTree (gradient boosted trees)  ---------------------------------------------------------------------------------------------------------------------------
-  library(xgboost)
+  # METHOD * gbm (gradient boosted trees)  ---------------------------------------------------------------------------------------------------------------------------
+  library(gbm)
   library(plyr)
   
-  # reactive getXgbTreeRecipe ----
-  getXgbTreeRecipe <- reactive({
+  # reactive getGbmRecipe ----
+  getGbmRecipe <- reactive({
     form <- formula(Response ~ .)
     recipes::recipe(form, data = getTrainData()) %>%
-      dynamicSteps(input$xgbTree_Preprocess) %>%
+      dynamicSteps(input$gbm_Preprocess) %>%
       step_rm(has_type("date"))
   })
   
   # observe the GO event -----
   observeEvent(
-    input$xgbTree_Go,
+    input$gbm_Go,
     {
-      method <- "xgbTree"
+      method <- "gbm"
       models[[method]] <- NULL
       showNotification(id = method, paste("Processing", method, "model using resampling"), session = session, duration = NULL)
       obj <- startMode(input$Parallel)
       tryCatch({
-        #Grid for searching gradient boost hyperparams
-        xgb_grid <- expand.grid(
-          nrounds = c(100, 250, 500, 1000, 1500, 3000),
-          max_depth = c(2, 4, 6),
-          eta = c(0.03, 0.1),
-          gamma = 0,
-          colsample_bytree = 0.8,
-          min_child_weight = 1,
-          subsample = 0.8
+        
+        gbm_grid <- expand.grid(
+          n.trees = c(100, 250, 500, 1000, 1500, 3000),
+          interaction.depth = c(2, 4, 6),
+          shrinkage = c(0.03, 0.1),
+          n.minobsinnode = 10
         )
         
         model <- caret::train(
-          getXgbTreeRecipe(),
+          getGbmRecipe(),
           data = getTrainData(),
           method = method,
           metric = "RMSE",
           trControl = getTrControl(),
-          tuneGrid = xgb_grid
+          tuneGrid = gbm_grid,
+          verbose = FALSE
         )
         
         deleteRds(method)
@@ -1230,9 +1238,9 @@ shinyServer(function(input, output, session) {
   )
   
   observeEvent(
-    input$xgbTree_Load,
+    input$gbm_Load,
     {
-      method  <- "xgbTree"
+      method  <- "gbm"
       model <- loadRds(method, session)
       if (!is.null(model)) {
         models[[method]] <- model
@@ -1241,28 +1249,28 @@ shinyServer(function(input, output, session) {
   )
   
   observeEvent(
-    input$xgbTree_Delete,
+    input$gbm_Delete,
     {
-      method <- "xgbTree"
+      method <- "gbm"
       models[[method]] <- NULL
       gc()
     }
   )
   
-  output$xgbTree_MethodSummary <- renderText({
-    method <- "xgbTree"
+  output$gbm_MethodSummary <- renderText({
+    method <- "gbm"
     description(method)
   })
   
-  output$xgbTree_Metrics <- renderTable({
-    method <- "xgbTree"
+  output$gbm_Metrics <- renderTable({
+    method <- "gbm"
     mod <- models[[method]]
     req(mod)
     mod$results[which.min(mod$results[, "RMSE"]), ]
   })
   
-  output$xgbTree_RecipeOutput <- renderTable({
-    method <- "xgbTree"
+  output$gbm_RecipeOutput <- renderTable({
+    method <- "gbm"
     mod <- models[[method]]
     req(mod)
     terms <- as.data.frame(mod$recipe$term_info)
@@ -1279,47 +1287,40 @@ shinyServer(function(input, output, session) {
       dplyr::summarise(count = n())
   })
   
-  #Old plot
-  # output$xgbTree_ModelTune <- renderPlot({
-  # method <- "xgbTree"
-  # mod <- models[[method]]
-  # req(mod) 
-  # plot(mod) })
-  
-  output$xgbTree_ModelTune <- renderPlot({
-    method <- "xgbTree"
+  output$gbm_ModelTune <- renderPlot({
+    method <- "gbm"
     mod <- models[[method]]
     req(mod)
     
     res <- mod$results
     
     ggplot(res, aes(
-      x = nrounds,
+      x = n.trees,
       y = RMSE,
-      colour = factor(max_depth),
-      group = max_depth
+      colour = factor(interaction.depth),
+      group = interaction.depth
     )) +
       geom_line() +
       geom_point(size = 2) +
-      facet_wrap(~ eta, labeller = label_both) +
+      facet_wrap(~ shrinkage, labeller = label_both) +
       labs(
-        x = "Number of rounds",
+        x = "Number of trees",
         y = "RMSE",
-        colour = "Max depth"
+        colour = "Interaction depth"
       ) +
       theme_minimal()
   })
   
-  output$xgbTree_VarImp <- renderPlot({
-    method <- "xgbTree"
+  output$gbm_VarImp <- renderPlot({
+    method <- "gbm"
     mod <- models[[method]]
     req(mod)
     varImp <- caret::varImp(mod)
     plot(varImp)
   })
   
-  output$xgbTree_RecipePrint <- renderUI({
-    method <- "xgbTree"
+  output$gbm_RecipePrint <- renderUI({
+    method <- "gbm"
     mod <- models[[method]]
     req(mod)
     html <- mod$recipe %>%
@@ -1335,8 +1336,8 @@ shinyServer(function(input, output, session) {
     )
   })
   
-  output$xgbTree_TrainSummary <- renderPrint({
-    method <- "xgbTree"
+  output$gbm_TrainSummary <- renderPrint({
+    method <- "gbm"
     mod <- models[[method]]
     req(mod)
     print(mod)
@@ -2626,6 +2627,1815 @@ shinyServer(function(input, output, session) {
     req(models[["svmLinear"]])
     models[["svmLinear"]]$bestTune
   }, rownames = FALSE)
+  
+  library(kernlab)
+  
+  # METHOD * svmLinear ---------------------------------------------------------------------------------------------------------------------------
+  
+  # reactive getSvmLinearRecipe ----
+  getSvmLinearRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$svmLinear_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$svmLinear_Go,
+    {
+      method <- "svmLinear"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # svmLinear tuning grid: C only
+        svmLinearGrid <- expand.grid(
+          C = c(0.001, 0.01, 0.1, 1, 10)
+        )
+        
+        model <- caret::train(
+          getSvmLinearRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = svmLinearGrid,
+          na.action = na.pass
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$svmLinear_Load,
+    {
+      method <- "svmLinear"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$svmLinear_Delete,
+    {
+      method <- "svmLinear"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$svmLinear_MethodSummary <- renderText({
+    method <- "svmLinear"
+    description(method)
+  })
+  
+  output$svmLinear_Metrics <- renderTable({
+    method <- "svmLinear"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$svmLinear_ModelTune <- renderPlot({
+    method <- "svmLinear"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$svmLinear_RecipePrint <- renderUI({
+    method <- "svmLinear"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$svmLinear_RecipeOutput <- renderTable({
+    method <- "svmLinear"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$svmLinear_TrainSummary <- renderPrint({
+    method <- "svmLinear"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$svmLinear_Coef <- renderTable({
+    req(models[["svmLinear"]])
+    models[["svmLinear"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * svmPoly ---------------------------------------------------------------------------------------------------------------------------
+  
+  # reactive getSvmPolyRecipe ----
+  getSvmPolyRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$svmPoly_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$svmPoly_Go,
+    {
+      method <- "svmPoly"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # svmPoly tuning grid: degree, scale, C
+        svmPolyGrid <- expand.grid(
+          degree = c(2, 3, 4),
+          scale = c(0.001, 0.01, 0.1),
+          C = c(0.1, 1, 10)
+        )
+        
+        model <- caret::train(
+          getSvmPolyRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = svmPolyGrid,
+          na.action = na.pass
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$svmPoly_Load,
+    {
+      method <- "svmPoly"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$svmPoly_Delete,
+    {
+      method <- "svmPoly"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$svmPoly_MethodSummary <- renderText({
+    method <- "svmPoly"
+    description(method)
+  })
+  
+  output$svmPoly_Metrics <- renderTable({
+    method <- "svmPoly"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$svmPoly_ModelTune <- renderPlot({
+    method <- "svmPoly"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$svmPoly_RecipePrint <- renderUI({
+    method <- "svmPoly"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$svmPoly_RecipeOutput <- renderTable({
+    method <- "svmPoly"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$svmPoly_TrainSummary <- renderPrint({
+    method <- "svmPoly"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$svmPoly_Coef <- renderTable({
+    req(models[["svmPoly"]])
+    models[["svmPoly"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * svmExpoString ---------------------------------------------------------------------------------------------------------------------------
+  
+  # reactive getSvmExpoStringRecipe ----
+  getSvmExpoStringRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$svmExpoString_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$svmExpoString_Go,
+    {
+      method <- "svmExpoString"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # svmExpoString tuning grid: lambda, C
+        svmExpoStringGrid <- expand.grid(
+          lambda = c(0.001, 0.01, 0.1, 1),
+          C = c(0.1, 1, 10)
+        )
+        
+        model <- caret::train(
+          getSvmExpoStringRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = svmExpoStringGrid,
+          na.action = na.pass
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$svmExpoString_Load,
+    {
+      method <- "svmExpoString"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$svmExpoString_Delete,
+    {
+      method <- "svmExpoString"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$svmExpoString_MethodSummary <- renderText({
+    method <- "svmExpoString"
+    description(method)
+  })
+  
+  output$svmExpoString_Metrics <- renderTable({
+    method <- "svmExpoString"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$svmExpoString_ModelTune <- renderPlot({
+    method <- "svmExpoString"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$svmExpoString_RecipePrint <- renderUI({
+    method <- "svmExpoString"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$svmExpoString_RecipeOutput <- renderTable({
+    method <- "svmExpoString"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$svmExpoString_TrainSummary <- renderPrint({
+    method <- "svmExpoString"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$svmExpoString_Coef <- renderTable({
+    req(models[["svmExpoString"]])
+    models[["svmExpoString"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * svmRadial ---------------------------------------------------------------------------------------------------------------------------
+  
+  # reactive getSvmRadialRecipe ----
+  getSvmRadialRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$svmRadial_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$svmRadial_Go,
+    {
+      method <- "svmRadial"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # svmRadial tuning grid: sigma, C
+        svmRadialGrid <- expand.grid(
+          sigma = c(0.001, 0.01, 0.1),
+          C = c(0.1, 1, 10)
+        )
+        
+        model <- caret::train(
+          getSvmRadialRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = svmRadialGrid,
+          na.action = na.pass
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$svmRadial_Load,
+    {
+      method <- "svmRadial"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$svmRadial_Delete,
+    {
+      method <- "svmRadial"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$svmRadial_MethodSummary <- renderText({
+    method <- "svmRadial"
+    description(method)
+  })
+  
+  output$svmRadial_Metrics <- renderTable({
+    method <- "svmRadial"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$svmRadial_ModelTune <- renderPlot({
+    method <- "svmRadial"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$svmRadial_RecipePrint <- renderUI({
+    method <- "svmRadial"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$svmRadial_RecipeOutput <- renderTable({
+    method <- "svmRadial"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$svmRadial_TrainSummary <- renderPrint({
+    method <- "svmRadial"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$svmRadial_Coef <- renderTable({
+    req(models[["svmRadial"]])
+    models[["svmRadial"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * svmSpectrumString ---------------------------------------------------------------------------------------------------------------------------
+  library(earth)
+  # reactive getSvmSpectrumStringRecipe ----
+  getSvmSpectrumStringRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$svmSpectrumString_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$svmSpectrumString_Go,
+    {
+      method <- "svmSpectrumString"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # svmSpectrumString tuning grid: length, C
+        svmSpectrumStringGrid <- expand.grid(
+          length = c(3, 4, 5, 6),
+          C = c(0.1, 1, 10)
+        )
+        
+        model <- caret::train(
+          getSvmSpectrumStringRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = svmSpectrumStringGrid,
+          na.action = na.pass
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$svmSpectrumString_Load,
+    {
+      method <- "svmSpectrumString"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$svmSpectrumString_Delete,
+    {
+      method <- "svmSpectrumString"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$svmSpectrumString_MethodSummary <- renderText({
+    method <- "svmSpectrumString"
+    description(method)
+  })
+  
+  output$svmSpectrumString_Metrics <- renderTable({
+    method <- "svmSpectrumString"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$svmSpectrumString_ModelTune <- renderPlot({
+    method <- "svmSpectrumString"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$svmSpectrumString_RecipePrint <- renderUI({
+    method <- "svmSpectrumString"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$svmSpectrumString_RecipeOutput <- renderTable({
+    method <- "svmSpectrumString"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$svmSpectrumString_TrainSummary <- renderPrint({
+    method <- "svmSpectrumString"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$svmSpectrumString_Coef <- renderTable({
+    req(models[["svmSpectrumString"]])
+    models[["svmSpectrumString"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * gaussprLinear ---------------------------------------------------------------------------------------------------------------------------
+  library(kernlab)
+  # reactive getGaussprLinearRecipe ----
+  getGaussprLinearRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$gaussprLinear_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$gaussprLinear_Go,
+    {
+      method <- "gaussprLinear"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # gaussprLinear has no tuneGrid
+        
+        model <- caret::train(
+          getGaussprLinearRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          na.action = na.pass
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$gaussprLinear_Load,
+    {
+      method <- "gaussprLinear"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$gaussprLinear_Delete,
+    {
+      method <- "gaussprLinear"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$gaussprLinear_MethodSummary <- renderText({
+    method <- "gaussprLinear"
+    description(method)
+  })
+  
+  output$gaussprLinear_Metrics <- renderTable({
+    method <- "gaussprLinear"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$gaussprLinear_ModelTune <- renderPlot({
+    method <- "gaussprLinear"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$gaussprLinear_RecipePrint <- renderUI({
+    method <- "gaussprLinear"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$gaussprLinear_RecipeOutput <- renderTable({
+    method <- "gaussprLinear"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$gaussprLinear_TrainSummary <- renderPrint({
+    method <- "gaussprLinear"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$gaussprLinear_Coef <- renderTable({
+    req(models[["gaussprLinear"]])
+    models[["gaussprLinear"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * svmLinear3 ---------------------------------------------------------------------------------------------------------------------------
+  library(LiblineaR)
+  # reactive getSvmLinear3Recipe ----
+  getSvmLinear3Recipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$svmLinear3_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$svmLinear3_Go,
+    {
+      method <- "svmLinear3"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # svmLinear3 tuning grid 
+        svmLinear3Grid <- expand.grid(
+          cost = c(0.001, 0.01, 0.1, 1, 10),
+          Loss = c("L2", "L1")   
+        )
+        
+        model <- caret::train(
+          getSvmLinear3Recipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = svmLinear3Grid,
+          na.action = na.pass
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$svmLinear3_Load,
+    {
+      method <- "svmLinear3"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$svmLinear3_Delete,
+    {
+      method <- "svmLinear3"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$svmLinear3_MethodSummary <- renderText({
+    method <- "svmLinear3"
+    description(method)
+  })
+  
+  output$svmLinear3_Metrics <- renderTable({
+    method <- "svmLinear3"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$svmLinear3_ModelTune <- renderPlot({
+    method <- "svmLinear3"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$svmLinear3_RecipePrint <- renderUI({
+    method <- "svmLinear3"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$svmLinear3_RecipeOutput <- renderTable({
+    method <- "svmLinear3"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$svmLinear3_TrainSummary <- renderPrint({
+    method <- "svmLinear3"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  output$svmLinear3_Coef <- renderTable({
+    req(models[["svmLinear3"]])
+    models[["svmLinear3"]]$bestTune
+  }, rownames = FALSE)
+  
+  # METHOD * gcvEarth ---------------------------------------------------------------------------------------------------------------------------
+  library(import)
+  library(earth)
+  # reactive getGcvEarthRecipe ----
+  getGcvEarthRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$gcvEarth_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$gcvEarth_Go,
+    {
+      method <- "gcvEarth"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # gcvEarth tuning grid: degree
+        gcvEarthGrid <- expand.grid(
+          degree = c(1, 2, 3)
+        )
+        
+        model <- caret::train(
+          getGcvEarthRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = gcvEarthGrid
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$gcvEarth_Load,
+    {
+      method <- "gcvEarth"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$gcvEarth_Delete,
+    {
+      method <- "gcvEarth"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$gcvEarth_MethodSummary <- renderText({
+    method <- "gcvEarth"
+    description(method)
+  })
+  
+  output$gcvEarth_Metrics <- renderTable({
+    method <- "gcvEarth"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$gcvEarth_ModelTune <- renderPlot({
+    method <- "gcvEarth"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$gcvEarth_RecipePrint <- renderUI({
+    method <- "gcvEarth"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$gcvEarth_RecipeOutput <- renderTable({
+    method <- "gcvEarth"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$gcvEarth_TrainSummary <- renderPrint({
+    method <- "gcvEarth"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$gcvEarth_Coef <- renderTable({
+    req(models[["gcvEarth"]])
+    models[["gcvEarth"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * gamboost ---------------------------------------------------------------------------------------------------------------------------
+  library(mboost)
+  
+  # reactive getGamboostRecipe ----
+  getGamboostRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$gamboost_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$gamboost_Go,
+    {
+      method <- "gamboost"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # gamboost tuning grid: mstop, prune
+        gamboostGrid <- expand.grid(
+          mstop = c(50, 100, 150, 200),
+          prune = c("no", "yes")
+        )
+        
+        model <- caret::train(
+          getGamboostRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = gamboostGrid
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$gamboost_Load,
+    {
+      method <- "gamboost"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$gamboost_Delete,
+    {
+      method <- "gamboost"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$gamboost_MethodSummary <- renderText({
+    method <- "gamboost"
+    description(method)
+  })
+  
+  output$gamboost_Metrics <- renderTable({
+    method <- "gamboost"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$gamboost_ModelTune <- renderPlot({
+    method <- "gamboost"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$gamboost_RecipePrint <- renderUI({
+    method <- "gamboost"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$gamboost_RecipeOutput <- renderTable({
+    method <- "gamboost"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$gamboost_TrainSummary <- renderPrint({
+    method <- "gamboost"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$gamboost_Coef <- renderTable({
+    req(models[["gamboost"]])
+    models[["gamboost"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # # METHOD * bartMachine ---------------------------------------------------------------------------------------------------------------------------
+  # library(rJava)
+  # library(bartMachine)
+  # # reactive getBartMachineRecipe ----
+  # getBartMachineRecipe <- reactive({
+  #   form <- formula(Response ~ .)
+  #   recipes::recipe(form, data = getTrainData()) %>%
+  #     dynamicSteps(input$bartMachine_Preprocess) %>%
+  #     step_rm(has_type("date"))
+  # })
+  # 
+  # # observe GO event ----
+  # observeEvent(
+  #   input$bartMachine_Go,
+  #   {
+  #     method <- "bartMachine"
+  #     models[[method]] <- NULL
+  #     
+  #     showNotification(
+  #       id = method,
+  #       paste("Processing", method, "model using resampling"),
+  #       session = session,
+  #       duration = NULL
+  #     )
+  #     
+  #     obj <- startMode(input$Parallel)
+  #     
+  #     tryCatch({
+  #       
+  #       # bartMachine tuning grid: num_trees, k, alpha, beta, nu
+  #       bartMachineGrid <- expand.grid(
+  #         num_trees = c(50, 100, 200),
+  #         k = c(2, 3, 5),
+  #         alpha = c(0.95),
+  #         beta = c(2),
+  #         nu = c(3, 5, 10)
+  #       )
+  #       
+  #       model <- caret::train(
+  #         getBartMachineRecipe(),
+  #         data = getTrainData(),
+  #         method = method,
+  #         metric = "RMSE",
+  #         trControl = getTrControl(),
+  #         tuneGrid = bartMachineGrid,
+  #         na.action = na.pass
+  #       )
+  #       
+  #       deleteRds(method)
+  #       saveToRds(model, method)
+  #       models[[method]] <- model
+  #       
+  #     },
+  #     finally = {
+  #       removeNotification(id = method)
+  #       stopMode(obj)
+  #     })
+  #   }
+  # )
+  # 
+  # observeEvent(
+  #   input$bartMachine_Load,
+  #   {
+  #     method <- "bartMachine"
+  #     model <- loadRds(method, session)
+  #     if (!is.null(model)) {
+  #       models[[method]] <- model
+  #     }
+  #   }
+  # )
+  # 
+  # observeEvent(
+  #   input$bartMachine_Delete,
+  #   {
+  #     method <- "bartMachine"
+  #     models[[method]] <- NULL
+  #     gc()
+  #   }
+  # )
+  # 
+  # output$bartMachine_MethodSummary <- renderText({
+  #   method <- "bartMachine"
+  #   description(method)
+  # })
+  # 
+  # output$bartMachine_Metrics <- renderTable({
+  #   method <- "bartMachine"
+  #   mod <- models[[method]]
+  #   req(mod)
+  #   mod$results[which.min(mod$results[, "RMSE"]), ]
+  # })
+  # 
+  # output$bartMachine_ModelTune <- renderPlot({
+  #   method <- "bartMachine"
+  #   mod <- models[[method]]
+  #   req(mod)
+  #   plot(mod)
+  # })
+  # 
+  # output$bartMachine_RecipePrint <- renderUI({
+  #   method <- "bartMachine"
+  #   mod <- models[[method]]
+  #   req(mod)
+  #   
+  #   html <- mod$recipe %>%
+  #     print() %>%
+  #     cli::cli_fmt() %>%
+  #     cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+  #     cli::ansi_html(escape_reserved = FALSE) %>%
+  #     gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+  #   
+  #   css <- paste(format(ansi_html_style()), collapse = "\n")
+  #   
+  #   tagList(
+  #     tags$head(tags$style(css)),
+  #     tags$pre(HTML(html))
+  #   )
+  # })
+  # 
+  # output$bartMachine_RecipeOutput <- renderTable({
+  #   method <- "bartMachine"
+  #   mod <- models[[method]]
+  #   req(mod)
+  #   
+  #   terms <- as.data.frame(mod$recipe$term_info)
+  #   n <- dim(terms)[1]
+  #   types <- vector(mode = "character", length = n)
+  #   
+  #   for (row in 1:n) {
+  #     types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+  #   }
+  #   
+  #   terms$type <- types
+  #   
+  #   terms |>
+  #     dplyr::filter(role == "predictor") |>
+  #     dplyr::select(type, source) |>
+  #     dplyr::group_by(type, source) |>
+  #     dplyr::summarise(count = n(), .groups = "drop")
+  # })
+  # 
+  # output$bartMachine_TrainSummary <- renderPrint({
+  #   method <- "bartMachine"
+  #   mod <- models[[method]]
+  #   req(mod)
+  #   print(mod)
+  # })
+  # 
+  # # output tuning/best parameters table ----
+  # output$bartMachine_Coef <- renderTable({
+  #   req(models[["bartMachine"]])
+  #   models[["bartMachine"]]$bestTune
+  # }, rownames = FALSE)
+  # 
+  
+  # METHOD * cubist ---------------------------------------------------------------------------------------------------------------------------
+  library(Cubist)
+  # reactive getCubistRecipe ----
+  getCubistRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$cubist_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$cubist_Go,
+    {
+      method <- "cubist"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # cubist tuning grid: committees, neighbors
+        cubistGrid <- expand.grid(
+          committees = c(1, 10, 25, 50),
+          neighbors = c(0, 1, 5, 9)
+        )
+        
+        model <- caret::train(
+          getCubistRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = cubistGrid
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$cubist_Load,
+    {
+      method <- "cubist"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$cubist_Delete,
+    {
+      method <- "cubist"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$cubist_MethodSummary <- renderText({
+    method <- "cubist"
+    description(method)
+  })
+  
+  output$cubist_Metrics <- renderTable({
+    method <- "cubist"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$cubist_ModelTune <- renderPlot({
+    method <- "cubist"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$cubist_RecipePrint <- renderUI({
+    method <- "cubist"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$cubist_RecipeOutput <- renderTable({
+    method <- "cubist"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$cubist_TrainSummary <- renderPrint({
+    method <- "cubist"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$cubist_Coef <- renderTable({
+    req(models[["cubist"]])
+    models[["cubist"]]$bestTune
+  }, rownames = FALSE)
+  
+  
+  # METHOD * logicBag ---------------------------------------------------------------------------------------------------------------------------
+  library(BiocManager)
+  library(logicFS)
+  # reactive getLogicBagRecipe ----
+  getLogicBagRecipe <- reactive({
+    form <- formula(Response ~ .)
+    recipes::recipe(form, data = getTrainData()) %>%
+      dynamicSteps(input$logicBag_Preprocess) %>%
+      step_rm(has_type("date"))
+  })
+  
+  # observe GO event ----
+  observeEvent(
+    input$logicBag_Go,
+    {
+      method <- "logicBag"
+      models[[method]] <- NULL
+      
+      showNotification(
+        id = method,
+        paste("Processing", method, "model using resampling"),
+        session = session,
+        duration = NULL
+      )
+      
+      obj <- startMode(input$Parallel)
+      
+      tryCatch({
+        
+        # logicBag tuning grid: nleaves, ntrees
+        logicBagGrid <- expand.grid(
+          nleaves = c(4, 6, 8, 10),
+          ntrees = c(25, 50, 100)
+        )
+        
+        model <- caret::train(
+          getLogicBagRecipe(),
+          data = getTrainData(),
+          method = method,
+          metric = "RMSE",
+          trControl = getTrControl(),
+          tuneGrid = logicBagGrid
+        )
+        
+        deleteRds(method)
+        saveToRds(model, method)
+        models[[method]] <- model
+        
+      },
+      finally = {
+        removeNotification(id = method)
+        stopMode(obj)
+      })
+    }
+  )
+  
+  observeEvent(
+    input$logicBag_Load,
+    {
+      method <- "logicBag"
+      model <- loadRds(method, session)
+      if (!is.null(model)) {
+        models[[method]] <- model
+      }
+    }
+  )
+  
+  observeEvent(
+    input$logicBag_Delete,
+    {
+      method <- "logicBag"
+      models[[method]] <- NULL
+      gc()
+    }
+  )
+  
+  output$logicBag_MethodSummary <- renderText({
+    method <- "logicBag"
+    description(method)
+  })
+  
+  output$logicBag_Metrics <- renderTable({
+    method <- "logicBag"
+    mod <- models[[method]]
+    req(mod)
+    mod$results[which.min(mod$results[, "RMSE"]), ]
+  })
+  
+  output$logicBag_ModelTune <- renderPlot({
+    method <- "logicBag"
+    mod <- models[[method]]
+    req(mod)
+    plot(mod)
+  })
+  
+  output$logicBag_RecipePrint <- renderUI({
+    method <- "logicBag"
+    mod <- models[[method]]
+    req(mod)
+    
+    html <- mod$recipe %>%
+      print() %>%
+      cli::cli_fmt() %>%
+      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
+      cli::ansi_html(escape_reserved = FALSE) %>%
+      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
+    
+    css <- paste(format(ansi_html_style()), collapse = "\n")
+    
+    tagList(
+      tags$head(tags$style(css)),
+      tags$pre(HTML(html))
+    )
+  })
+  
+  output$logicBag_RecipeOutput <- renderTable({
+    method <- "logicBag"
+    mod <- models[[method]]
+    req(mod)
+    
+    terms <- as.data.frame(mod$recipe$term_info)
+    n <- dim(terms)[1]
+    types <- vector(mode = "character", length = n)
+    
+    for (row in 1:n) {
+      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
+    }
+    
+    terms$type <- types
+    
+    terms |>
+      dplyr::filter(role == "predictor") |>
+      dplyr::select(type, source) |>
+      dplyr::group_by(type, source) |>
+      dplyr::summarise(count = n(), .groups = "drop")
+  })
+  
+  output$logicBag_TrainSummary <- renderPrint({
+    method <- "logicBag"
+    mod <- models[[method]]
+    req(mod)
+    print(mod)
+  })
+  
+  # output tuning/best parameters table ----
+  output$logicBag_Coef <- renderTable({
+    req(models[["logicBag"]])
+    models[["logicBag"]]$bestTune
+  }, rownames = FALSE)
+  
   # end of maintenance point ---------------------------------------------------------------------------------------------------------------------------
 
   
