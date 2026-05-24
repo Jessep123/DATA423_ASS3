@@ -31,7 +31,150 @@ shinyServer(function(input, output, session) {
   # output Missing ----
   output$Missing <- renderPlot({
     d <- getData()
-    vis_dat(d)
+    if(input$colour_missing){
+      scale_col <- NULL
+    } else {
+      scale_col <- scale_fill_manual(
+      values = c(
+        "character" = "grey",
+        "factor"    = "grey",
+        "numeric"   = "grey",
+        "integer"   = "grey",
+        "Date"      = "grey",
+        "ordered\nfactor" = "grey"
+      ),
+      na.value = "red"
+    )}
+    
+    vis_dat(d) +
+      scale_x_discrete(position = "bottom") +  
+      scale_col +
+      labs(
+        title = "Missing Data"
+      ) +
+      theme(
+        axis.text.x = element_text(
+          angle = 45,
+          hjust = 1,
+          size = 10
+        ),
+        plot.margin = ggplot2::margin(t = 20, r = 10, b = 80, l = 10)  
+      )
+  })
+  
+  #rpart plot
+  output$rpart <- renderPlot({
+    df <- getData()
+    
+    #Removing manually specified options if needed
+    df <- df[, !names(df) %in% input$rpart_exclude_vars, drop = FALSE]
+    
+    df <- df %>%
+      #Sum total of columns with a missing value
+      mutate(missing_count = rowSums(is.na(.)))
+    
+    # Default method is regression
+    method_type <- "anova"
+    
+    #Default title
+    prediction_title <- "Predicting Number of Missing Values Per Observation"
+    
+    #Special condition for binary classification
+    if (input$rpart_target_type == "Binary (Missing/Not Missing)"){
+      
+      #Default title 
+      prediction_title <- "Predicting Missing vs Complete Observations"
+      
+      if(is.null(input$rpart_binary_predict)){
+        #Converting missing_count to binary Missing/No missing
+        df$missing_count <- factor(
+          ifelse(df$missing_count > 0, "Missing", "Complete")
+        )}
+      
+      else{
+        cols <- input$rpart_binary_predict
+        cols <- intersect(cols, names(df))
+        req(length(cols) > 0)
+        
+        df$missing_count <- factor(
+          ifelse(rowSums(is.na(df[, cols, drop = FALSE])) > 0,
+                 "Missing",
+                 "Complete")
+        )     
+        
+        prediction_title <-  paste0("Predicting Missing Values for ", input$rpart_binary_predict)
+      }
+      
+      
+      #Converting method_type to class
+      method_type <- "class"
+      
+      
+    }
+    
+    
+    
+    rpart_model <- rpart(formula = missing_count ~ .,
+                         data = df,
+                         method = method_type,
+                         control = rpart.control(
+                           maxdepth = input$rpart_maxdepth,
+                           cp = input$rpart_cp,
+                           minsplit = input$rpart_minsplit
+                         ))
+    #Plot title
+    rpart_title <- paste0(prediction_title)
+    
+    rpart_subtitle <- paste0(
+      "Max Depth: ", input$rpart_maxdepth,
+      " | Min Split: ", input$rpart_minsplit,
+      " | CP: ", input$rpart_cp
+    )
+    
+    if (input$rpart_plot_mode == "tree"){
+      
+      rpart.plot(rpart_model, 
+                 shadow.col = "gray",
+                 type = as.integer(input$rpart_type),
+                 extra = ifelse(input$rpart_extra, 1, 0),
+                 main = rpart_title,
+                 sub = rpart_subtitle
+      )
+      
+      #Change plot and titles if variable importance is selected
+    } else if(input$rpart_plot_mode == "varimp"){
+      
+      #Creating dataframe of model importance features
+      imp_df <- data.frame(
+        Variable = names(rpart_model$variable.importance),
+        Importance = as.numeric(rpart_model$variable.importance)
+      )
+      
+      #Ordering imp_df by importance 
+      imp_df <- imp_df[order(imp_df$Importance, decreasing = TRUE), ]
+      
+      #Bar plot of importance by variable
+      ggplot(imp_df, aes(x = reorder(Variable, Importance), y = Importance)) +
+        geom_col() +
+        coord_flip() +
+        labs(
+          title = "Variable Importance",
+          x = "Variable",
+          y = "Importance"
+        ) 
+    }
+  })
+  
+  observe({
+    df <- getData()
+    
+    valid_cols <- names(df)[!names(df) %in% c("Response", "Exercise", "Alcohol", 'BloodType', 'ChemoTreatments', 'ObservationDate', 'Coffee')]
+    
+    updatePickerInput(
+      session,
+      "rpart_binary_predict",
+      choices = valid_cols
+    )
   })
   
   # output Corr ----
@@ -42,9 +185,13 @@ shinyServer(function(input, output, session) {
     corrgram::corrgram(d, order = "OLO", main = "Numeric Data Correlation")
   })
   
-  # output DataSummary ----
-  output$DataSummary <- renderPrint({
-    str(getData())
+
+  
+  output$DataSummary <- renderUI({
+    data <- getData()
+    data %>%
+      summarytools::dfSummary(col.widths = c(10,80,150,120,120,180,220)) %>%
+      summarytools::view(, method = "render")
   })
   
   # output Table ----
@@ -403,7 +550,13 @@ shinyServer(function(input, output, session) {
       showNotification(id = method, paste("Processing", method, "model using resampling"), session = session, duration = NULL)
       obj <- startMode(input$Parallel)
       tryCatch({
-        model <- caret::train(getGlmnetRecipe(), data = getTrainData(), method = method, metric = "RMSE", trControl = getTrControl(), tuneLength = 5, na.action = na.pass)
+        model <- caret::train(getGlmnetRecipe(), 
+                              data = getTrainData(),
+                              method = method,
+                              metric = "RMSE", 
+                              trControl = getTrControl(), 
+                              tuneLength = 15, 
+                              na.action = na.pass)
         deleteRds(method)
         saveToRds(model, method)
         models[[method]] <- model
@@ -508,7 +661,9 @@ shinyServer(function(input, output, session) {
     req(models$glmnet)
     co <- as.matrix(coef(models$glmnet$finalModel, s  = models$glmnet$bestTune$lambda))  # special for glmnet
     df <- as.data.frame(co, row.names = rownames(co))
-    df[df$s1 != 0.000, ,drop=FALSE]
+    # df[df$s0 != 0.000, ,drop=FALSE]
+    # browser()
+    df[df[1] != 0.000,, drop= FALSE]
   }, rownames = TRUE, colnames = FALSE)
   
   
@@ -1366,8 +1521,8 @@ shinyServer(function(input, output, session) {
         
         #tuning grid for knn hyperparams 
         knn_grid <-  expand.grid(
-          kmax = seq(5, 50, by = 5),
-          distance = c(1, 1.5, 2),
+          kmax = seq(1, 25, by = 2),
+          distance = c(1, 3, 5),
           kernel = c(
             "rectangular",
             "triangular",
@@ -1437,7 +1592,7 @@ shinyServer(function(input, output, session) {
     method <- "kknn"
     mod <- models[[method]]
     req(mod)
-    plot(mod)
+    plot(mod, digits = 3)
   })
   
   output$kknn_RecipePrint <- renderUI({
@@ -1743,7 +1898,7 @@ shinyServer(function(input, output, session) {
         
         # smaller grid for caret::rbf
         rbfGrid <- expand.grid(
-          size = c(3)
+          size = c(1,3,5,10)
         )
         
         model <- caret::train(
@@ -1860,156 +2015,6 @@ shinyServer(function(input, output, session) {
   output$rbf_Coef <- renderTable({
     req(models[["rbf"]])
     models[["rbf"]]$bestTune
-  }, rownames = FALSE)
-  
-  # METHOD * elm ---------------------------------------------------------------------------------------------------------------------------
-  # library(elmNN)
-  # reactive getElmRecipe ----
-  getElmRecipe <- reactive({
-    form <- formula(Response ~ .)
-    recipes::recipe(form, data = getTrainData()) %>%
-      dynamicSteps(input$elm_Preprocess) %>%
-      step_rm(has_type("date"))
-  })
-  
-  # observe GO event ----
-  observeEvent(
-    input$elm_Go,
-    {
-      method <- "elm"
-      models[[method]] <- NULL
-      
-      showNotification(
-        id = method,
-        paste("Processing", method, "model using resampling"),
-        session = session,
-        duration = NULL
-      )
-      
-      obj <- startMode(input$Parallel)
-      
-      tryCatch({
-        
-        # ELM hyperparameter tuning grid
-        elmGrid <- expand.grid(
-          nhid = c(1, 3, 5, 7, 9),
-          actfun = c("purelin", "sig", "radbas")
-        )
-        
-        model <- caret::train(
-          getElmRecipe(),
-          data = getTrainData(),
-          method = method,
-          metric = "RMSE",
-          trControl = getTrControl(),
-          tuneGrid = elmGrid,
-          na.action = na.pass
-        )
-        
-        deleteRds(method)
-        saveToRds(model, method)
-        models[[method]] <- model
-        
-      },
-      finally = {
-        removeNotification(id = method)
-        stopMode(obj)
-      })
-    }
-  )
-  
-  observeEvent(
-    input$elm_Load,
-    {
-      method <- "elm"
-      model <- loadRds(method, session)
-      if (!is.null(model)) {
-        models[[method]] <- model
-      }
-    }
-  )
-  
-  observeEvent(
-    input$elm_Delete,
-    {
-      method <- "elm"
-      models[[method]] <- NULL
-      gc()
-    }
-  )
-  
-  output$elm_MethodSummary <- renderText({
-    method <- "elm"
-    description(method)
-  })
-  
-  output$elm_Metrics <- renderTable({
-    method <- "elm"
-    mod <- models[[method]]
-    req(mod)
-    mod$results[which.min(mod$results[, "RMSE"]), ]
-  })
-  
-  output$elm_ModelTune <- renderPlot({
-    method <- "elm"
-    mod <- models[[method]]
-    req(mod)
-    plot(mod)
-  })
-  
-  output$elm_RecipePrint <- renderUI({
-    method <- "elm"
-    mod <- models[[method]]
-    req(mod)
-    
-    html <- mod$recipe %>%
-      print() %>%
-      cli::cli_fmt() %>%
-      cli::ansi_collapse(sep = "<br>", last = "<br>") %>%
-      cli::ansi_html(escape_reserved = FALSE) %>%
-      gsub(pattern = "──────", replacement = "─", x = ., fixed = TRUE)
-    
-    css <- paste(format(ansi_html_style()), collapse = "\n")
-    
-    tagList(
-      tags$head(tags$style(css)),
-      tags$pre(HTML(html))
-    )
-  })
-  
-  output$elm_RecipeOutput <- renderTable({
-    method <- "elm"
-    mod <- models[[method]]
-    req(mod)
-    
-    terms <- as.data.frame(mod$recipe$term_info)
-    n <- dim(terms)[1]
-    types <- vector(mode = "character", length = n)
-    
-    for (row in 1:n) {
-      types[row] <- paste(collapse = " ", unlist(terms$type[row]))
-    }
-    
-    terms$type <- types
-    
-    terms |>
-      dplyr::filter(role == "predictor") |>
-      dplyr::select(type, source) |>
-      dplyr::group_by(type, source) |>
-      dplyr::summarise(count = n(), .groups = "drop")
-  })
-  
-  output$elm_TrainSummary <- renderPrint({
-    method <- "elm"
-    mod <- models[[method]]
-    req(mod)
-    print(mod)
-  })
-  
-  # output tuning/best parameters table ----
-  output$elm_Coef <- renderTable({
-    req(models[["elm"]])
-    models[["elm"]]$bestTune
   }, rownames = FALSE)
   
   # METHOD * brnn ---------------------------------------------------------------------------------------------------------------------------
@@ -2268,7 +2273,7 @@ shinyServer(function(input, output, session) {
     method <- "dnn"
     mod <- models[[method]]
     req(mod)
-    plot(mod)
+    plot(mod, digits = 3)
   })
   
   output$dnn_RecipePrint <- renderUI({
@@ -2812,7 +2817,7 @@ shinyServer(function(input, output, session) {
         svmPolyGrid <- expand.grid(
           degree = c(2, 3, 4),
           scale = c(0.001, 0.01, 0.1),
-          C = c(0.1, 1, 10)
+          C = c(0.1, 1, 5, 10, 20, 50)
         )
         
         model <- caret::train(
@@ -2873,7 +2878,7 @@ shinyServer(function(input, output, session) {
     method <- "svmPoly"
     mod <- models[[method]]
     req(mod)
-    plot(mod)
+    plot(mod, digits = 3)
   })
   
   output$svmPoly_RecipePrint <- renderUI({

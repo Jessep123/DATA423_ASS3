@@ -1,22 +1,96 @@
 shinyUI(navbarPage(
   title = "Assignment 3 - Jesse Pilcher | 19717404",
   
+  #Setting theme and font
+  theme = bs_theme(
+    bootswatch = "flatly",
+    base_font = "Times New Roman"
+  ),
   
   
   tabPanel("Data",
-           verbatimTextOutput(outputId = "DataSummary"),
-           fluidRow(
-             column(width = 4,
-                    sliderInput(inputId = "Multiplier", label = "IQR multiplier", min = 0, max = 10, step = 0.1, value = 1.5)
-             ),
-             column(width = 3,
-                    checkboxInput(inputId = "Normalise", label = "Standardise chart", value = TRUE)
-             )
-           ),
-           plotOutput(outputId = "BoxPlots"),
-           plotOutput(outputId = "Missing"),
-           plotOutput(outputId = "Corr"),
-           DT::dataTableOutput(outputId = "Table")
+           tabsetPanel(type = "pills",
+                       
+                       tabPanel("Summary",
+                                uiOutput(outputId = "DataSummary")
+                       ),
+                       
+                       tabPanel("Outliers",
+                         plotOutput(outputId = "BoxPlots"),
+                         fluidRow(
+                           column(width = 4,
+                                  sliderInput(inputId = "Multiplier", label = "IQR multiplier", min = 0, max = 10, step = 0.1, value = 1.5)
+                           ),
+                           column(width = 3,
+                                  checkboxInput(inputId = "Normalise", label = "Standardise chart", value = TRUE)
+                           )
+                         )
+                       ),
+                       
+                       tabPanel("Missingness",
+                                tabsetPanel( type = 'pills',
+                                tabPanel("Missing Plot",
+                                  plotOutput(outputId = "Missing"),
+                                  checkboxInput("colour_missing",
+                                                "Add Colour")),
+                                tabPanel("Rpart Missing Tree",
+                                         plotOutput("rpart", height = "600px"),
+                                         accordion(open = FALSE,
+                                                   accordion_panel("Chart Controls",
+                                                                  
+                                                                     fluidRow(
+                                                                       column(10,
+                                                                              fluidRow(
+                                                                                column(4, sliderInput("rpart_maxdepth", "Max Depth", 1, 10, 5)),
+                                                                                column(4, sliderInput("rpart_cp", "Pruning (cp)", 0.001, 0.1, 0.01, step = 0.01)),
+                                                                                column(4, sliderInput("rpart_minsplit", "Min Split", 10, 100, 20))
+                                                                              ),
+                                                                              fluidRow(
+                                                                                column(4, selectInput("rpart_type", "Layout",
+                                                                                                      c("Standard" = 2, "Vertical" = 3))),
+                                                                                column(4, pickerInput("rpart_exclude_vars", "Exclude Variables",
+                                                                                                      choices = NULL, multiple = TRUE)),
+                                                                                column(4, selectInput("rpart_target_type", "Target Type",
+                                                                                                      choices = c("# Missing Values",
+                                                                                                                  "Binary (Missing/Not Missing)"),
+                                                                                                      selected = "# Missing Values"))
+                                                                              ),
+                                                                              fluidRow(
+                                                                                column(4, checkboxInput("rpart_extra", "Show Extra Info", TRUE)),
+                                                                                column(4, radioButtons("rpart_plot_mode", "Display",
+                                                                                                       choices = c("Tree" = "tree",
+                                                                                                                   "Variable Importance" = "varimp"),
+                                                                                                       selected = "tree", inline = TRUE)),
+                                                                                column(4,
+                                                                                       conditionalPanel(
+                                                                                         condition = "input.rpart_target_type == 'Binary (Missing/Not Missing)'",
+                                                                                         pickerInput("rpart_binary_predict", "Columns to Predict",
+                                                                                                     choices = NULL, multiple = TRUE)
+                                                                                       )
+                                                                                )
+                                                                              )
+                                                                       ),
+                                                                       column(2, div(
+                                                                         style = "height:100%;display:flex;justify-content:center;align-items:center;",
+                                                                         actionButton("reset_rpart_plot", "Reset")
+                                                                       ))
+                                                                     )
+                                                                   
+                                                   )
+                                         )
+                                )
+                       
+                                )
+                                ),
+                       
+                       tabPanel("Correlation",
+                                plotOutput(outputId = "Corr")
+                                ),
+                       
+                       tabPanel("Data Table",
+                                DT::dataTableOutput(outputId = "Table")
+                       )
+           )
   ),
   
   tabPanel("Split",
@@ -615,67 +689,7 @@ shinyUI(navbarPage(
                                            )
                                            ),
                                   
-                                  #NOT WORKING ATM BECAUSE BITCH FUCK
-                                  # tabPanel("Extreme Learning Models (ELM)", #Nmethod = elm
-                                  #          verbatimTextOutput(outputId = "elm_MethodSummary"),
-                                  #          fluidRow(
-                                  #            column(
-                                  #              width = 4,
-                                  #              selectizeInput(
-                                  #                inputId = "elm_Preprocess",
-                                  #                label = "Pre-processing",
-                                  #                choices = unique(c(default_initial, ppchoices)),
-                                  #                multiple = TRUE,
-                                  #                selected = default_initial
-                                  #              ),
-                                  #              bsTooltip(
-                                  #                id = "elm_Preprocess",
-                                  #                title = "These entries will be populated in the correct order from a saved model once it loads",
-                                  #                placement = "top"
-                                  #              )
-                                  #            ),
-                                  #            column(
-                                  #              width = 1,
-                                  #              actionButton(inputId = "elm_Go", label = "Train", icon = icon("play")),
-                                  #              bsTooltip(id = "elm_Go", title = "This will train or retrain your model (and save it)")
-                                  #            ),
-                                  #            column(
-                                  #              width = 1,
-                                  #              actionButton(inputId = "elm_Load", label = "Load", icon = icon("file-arrow-up")),
-                                  #              bsTooltip(id = "elm_Load", title = "This will reload your saved model")
-                                  #            ),
-                                  #            column(
-                                  #              width = 1,
-                                  #              actionButton(inputId = "elm_Delete", label = "Forget", icon = icon("trash-can")),
-                                  #              bsTooltip(id = "elm_Delete", title = "This will remove your model from memory")
-                                  #            )
-                                  #          ),
-                                  #          hr(),
-                                  #          h3("Resampled performance:"),
-                                  #          tableOutput(outputId = "elm_Metrics"),
-                                  #          hr(),
-                                  #          h3("Hyperparameter Tuning:"),
-                                  #          plotOutput(outputId = "elm_ModelTune"),
-                                  #          hr(),
-                                  #          h3("Recipe:"),
-                                  #          htmlOutput(outputId = "elm_RecipePrint"),
-                                  #          h3("Outputs"),
-                                  #          tableOutput(outputId = "elm_RecipeOutput"),
-                                  #          fluidRow(
-                                  #            column(
-                                  #              width = 6,
-                                  #              h3("Training Summary:"),
-                                  #              verbatimTextOutput(outputId = "elm_TrainSummary")
-                                  #            ),
-                                  #            column(
-                                  #              width = 6,
-                                  #              h3("Best Tune"),
-                                  #              wellPanel(
-                                  #                tableOutput(outputId = "elm_Coef")
-                                  #              )
-                                  #            )
-                                  #          )),
-                                  # tabPanel("Multi-Layer Perceptron"),
+                                 
                                   tabPanel("Bayesian Regularized Neural Net", #method = brnn
                                            verbatimTextOutput(outputId = "brnn_MethodSummary"),
                                            fluidRow(

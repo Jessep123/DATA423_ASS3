@@ -22,7 +22,9 @@ library(ggplot2)
 library(butcher)
 library(MASS)
 library(fastICA)
+library(bslib)
 
+library(shinyWidgets)
 options(digits = 3)
 
 glmnet_initial <- c("naomit", "month", "dummy") # <-- These are arbitrary starting values. Set these to your best recommendation
@@ -198,31 +200,29 @@ deleteRds <- function(name) {
 
 #List of methods used in the model for plotting
 methods_used <- c(
-  "glmnet", 
-  "pls", 
-  "pcr", 
-  "rpart", 
+  "glmnet",
+  "pls",
+  "pcr",
+  "rpart",
   "lmStepAIC",
   "ranger",
-  "xgbTree",
+  "gbm",
+  "kknn",
+  "avNNet",
   "rbf",
-  # "mlpKerasDropout",
-  #"elm", 
-  # "mlp", 
   "brnn",
-  "lssvmRadial",
-  "svmLinear", 
-  "svmPoly", 
+  "dnn",
+  "lssvmLinear",
+  "svmLinear",
+  "svmPoly",
   "svmExpoString",
-  "svmRadial", 
+  "svmRadial",
   "svmSpectrumString",
-  "avNNet", 
-  "gamboost", 
-  "gcvEarth", 
-  "cubist",
   "gaussprLinear",
-  "logicBag",
-  "kknn"
-  # "bartMachine"
+  "svmLinear3",
+  "gcvEarth",
+  "gamboost",
+  "cubist",
+  "logicBag"
 )
 
